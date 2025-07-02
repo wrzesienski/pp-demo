@@ -52,11 +52,10 @@
         repo: "deb {{ os_apt_mysql_repo }} buster mysql-5.7"
     - name: Install mysql-server
       apt:
-        name: "{{item}}"
+        name: mysql-server
         state: present
         update_cache: yes
-      with_items:
-        - mysql-server
+        
     - name: Set MySQL root password
       vars:
         ansible_python_interpreter: "{{ python_bin_dir }}"
@@ -95,10 +94,10 @@
       blockinfile:
         path: /etc/security/limits.conf
         block: |
-          root hard nofile os_systemd_limits.root_hard_nofile
-          root soft nofile os_systemd_limits.root_soft_nofile
-          * soft nofile os_systemd_limits.all_soft_nofile
-          * hard nofile os_systemd_limits.all_hard_nofile
+          root hard nofile {{ os_systemd_limits.root_hard_nofile }}
+          root soft nofile {{ os_systemd_limits.root_soft_nofile }}
+          * soft nofile {{ os_systemd_limits.all_soft_nofile }}
+          * hard nofile {{ os_systemd_limits.all_hard_nofile }}
 
 # setup deploy user
     - name: Create deploy user
