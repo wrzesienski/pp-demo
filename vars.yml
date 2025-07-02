@@ -1,0 +1,85 @@
+id_rsa_pub: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkIBm/vjcCocLxO2TvqAz/hofd93q1A0yMRT5C2Gspu deploy@example.dev
+
+mysql_socket: /var/run/mysqld/mysqld.sock
+
+python_version: 3.9.6
+python_source_url: https://www.python.org/ftp/python/{{ python_version }}/Python-{{ python_version }}.tgz
+python_bin_dir: /opt/python3/bin/python3.9
+pip_list:
+- pip
+- pycurl
+- mysqlclient
+- pymysql
+- mysql.connector
+- certifi
+- redis
+- sentry-sdk
+
+composer_install_url: https://getcomposer.org/installer
+composer_bin_dir: /usr/local/bin/composer
+deploy_user: "deploy"
+
+os_kernel_setup:
+- name: "net.ipv4.ip_local_port_range"
+  value: "1024 65535" 
+- name: "fs.nr_open"
+  value: "2000000" 
+- name: "fs.file-max"
+  value: "5000000"
+
+os_systemd_limits: 
+  root_soft_nofile: 6500535
+  root_hard_nofile: 6500536
+  all_soft_nofile: 40000000
+  all_hard_nofile: 40000000
+
+os_apt_mysql_repo: http://repo.mysql.com/apt/debian/
+os_apt_keyserver: keyserver.ubuntu.com
+os_apt_id: B7B3B788A8D3785C
+os_apt_list:
+- libfreetype6
+- libfreetype6-dev
+- zlib1g
+- zlib1g-dev
+- libxml2
+- libxml2-dev
+- libxslt1-dev
+- libxslt1.1
+- gcc
+- curl
+- make
+- libcurl4-openssl-dev
+- libssl-dev
+- mc
+- wget
+- aptitude
+- unzip
+- htop
+- nload
+- libffi-dev
+# - libmariadbclient-dev
+- libmariadb-dev
+- gnupg2
+- pkg-config
+- tcl
+- git
+- sendmail
+- openssl
+- python3-minimal
+# - python-minimal
+- python3-setuptools
+# - python-setuptools
+- screen
+- ethtool
+- openssl
+- nodejs
+- npm
+- nginx
+- php
+
+nginx_logrotate_path: /etc/logrotate.d/nginx
+nginx_dir_list:
+- /etc/nginx/projects_conf
+- /etc/nginx/projects
+- /etc/nginx/projects/panels
+- /var/www/server/frontend/shared/runtime/GeoIP

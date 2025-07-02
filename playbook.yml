@@ -1,0 +1,165 @@
+---
+- name: Configure server
+  hosts: all
+  become: true
+  vars_files:
+  - vars.yml
+  - secrets.yml
+  tasks:
+
+# init setup
+    - name: Set timezone to UTC
+      timezone:
+        name: UTC
+    - name: Remove default debian user
+      user:
+        name: debian
+        state: absent
+        remove: yes
+    - name: Install required packages
+      apt:
+        name: "{{ os_apt_list }}"
+        state: present
+        update_cache: yes
+    - name: Download Python source
+      get_url:
+        url: "{{ python_source_url }}"
+        dest: /home/developer/Python-{{ python_version }}.tgz
+    - name: Extract Python source
+      unarchive:
+        src: /home/developer/Python-{{ python_version }}.tgz
+        dest: /home/developer/
+        remote_src: yes
+    - name: Configure and install Python
+      shell: |
+        cd /home/developer/Python-{{ python_version }}/ 
+        ./configure --prefix=/opt/python3 && make && make install
+      args:
+        creates: "{{ python_bin_dir }}"
+    - name: Upgrade pip and install required packages
+      pip:
+        executable: /opt/python3/bin/pip3.9
+        name: "{{ pip_list }}"
+        state: latest
+
+# setup mysql
+    - name: Add PGP key
+      apt_key:
+        keyserver: "{{ os_apt_keyserver }}"
+        id: "{{ os_apt_id }}"
+    - name: Add official APT repository
+      apt_repository:
+        repo: "deb {{ os_apt_mysql_repo }} buster mysql-5.7"
+    - name: Install mysql-server
+      apt:
+        name: "{{item}}"
+        state: present
+        update_cache: yes
+      with_items:
+        - mysql-server
+    - name: Set MySQL root password
+      vars:
+        ansible_python_interpreter: "{{ python_bin_dir }}"
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        check_implicit_admin: yes
+        login_user: root
+        login_password: ""
+        login_unix_socket: "{{ mysql_socket }}"
+      ignore_errors: true
+    - name: Download and install Composer
+      shell: |
+        php -r "copy('{{ composer_install_url }}', 'composer-setup.php');"
+        php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+        php -r "unlink('composer-setup.php');"
+      args:
+        creates: "{{ composer_bin_dir }}"
+
+# setup system parameters
+    - name: Configure kernel parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      with_items:
+      - "{{ os_kernel_setup }}"
+    - name: Configure systemd limits
+      lineinfile:
+        path: /etc/systemd/system.conf
+        regexp: "^#?DefaultLimitNOFILE="
+        line: "DefaultLimitNOFILE={{ os_systemd_limits.root_soft_nofile }}"
+        state: present
+    - name: Configure user limits
+      blockinfile:
+        path: /etc/security/limits.conf
+        block: |
+          root hard nofile os_systemd_limits.root_hard_nofile
+          root soft nofile os_systemd_limits.root_soft_nofile
+          * soft nofile os_systemd_limits.all_soft_nofile
+          * hard nofile os_systemd_limits.all_hard_nofile
+
+# setup deploy user
+    - name: Create deploy user
+      user:
+        name: "{{ deploy_user }}"
+        groups: sudo
+        append: yes
+        shell: /bin/bash
+    - name: Set up SSH directory for deploy
+      file:
+        path: /home/{{ deploy_user }}/.ssh
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: '0700'
+    - name: Install SSH public key
+      copy:
+        content: "{{ id_rsa_pub }}"
+        dest: /home/{{ deploy_user }}/.ssh/authorized_keys
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: '0600'
+    - name: Install SSH private key
+      copy:
+        content: "{{ id_rsa }}"
+        dest: /home/{{ deploy_user }}/.ssh/id_rsa
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: '0600'
+
+# setup nginx 
+    - name: Create project directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+      with_items:
+        - "{{ nginx_dir_list }}"
+    - name: Set permissions for projects directory
+      file:
+        path: /etc/nginx/projects
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: '0777'
+        recurse: yes
+    - name: Install Nginx configuration
+      copy:
+        src: nginx.conf
+        dest: /etc/nginx/nginx.conf
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Configure Nginx log rotation
+      copy:
+        src: files/nginx-logrotate
+        dest: "{{ nginx_logrotate_path }}"
+    - name: Reboot server
+      reboot:
+        msg: "Reboot initiated by Ansible"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
